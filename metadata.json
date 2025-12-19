@@ -1,0 +1,5 @@
+{
+  "name": "Bảng Chức Danh AI",
+  "description": "Ứng dụng tạo ảnh bảng chức danh cao cấp từ thông tin và ảnh gương mặt người dùng, sử dụng công nghệ AI.",
+  "requestFramePermissions": []
+}
