@@ -140,10 +140,10 @@ const App: React.FC = () => {
         {/* Header */}
         <header className="mb-10 text-center">
           <h1 className="text-3xl md:text-5xl font-bold bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-600 bg-clip-text text-transparent mb-3 tracking-tight">
-            CHẾ TÁC BẢNG DANH VỊ HOÀNG GIA
+            Cao Trang AI
           </h1>
           <p className="text-amber-200/60 text-lg uppercase tracking-widest text-sm">
-            Công nghệ AI • Đẳng cấp Lãnh đạo • Tinh hoa Quà tặng
+            Kiến Tạo Biển Chức Danh Cao Cấp
           </p>
         </header>
 

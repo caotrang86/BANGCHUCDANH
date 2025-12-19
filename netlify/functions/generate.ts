@@ -149,13 +149,13 @@ export const handler: Handler = async (event) => {
     const prompt = `
 Ultra hyper-realistic, close-up cinematic 3D shot of a luxury dark mahogany wooden nameplate on a premium leather executive desk pad.
 
-- LEFT portrait: embossed relief 3D, must match EXACT facial identity from reference image; do NOT stylize/distort/alter the face; facial likeness is top priority.
+- LEFT portrait: High-quality FULL COLOR photographic portrait embedded/printed on the left side of the nameplate. DO NOT make it a monochromatic relief or statue. It must be a realistic, vibrant color photo of the person. Must match EXACT facial identity from reference image.
 - RIGHT text: Imperial Gold embossed; Line1: "${name}"; ${jobPromptLine}; Line3: "${phone}".
 - Must render Vietnamese text correctly with proper accents; no font errors.
 - Outfit is: "${outfit}"
 - Portrait style notes: "${portraitStyle}"
 - Background: blurred high-end corporate office, bokeh, cinematic DOF.
-- Negative prompt: no watermark, no gibberish text, no warped letters, no face mismatch, no extra fingers, no cartoon/anime.
+- Negative prompt: no watermark, no gibberish text, no warped letters, no face mismatch, no extra fingers, no cartoon/anime, no grayscale, no bronze sculpture face, no monochromatic face.
     `.trim();
 
     const response = await ai.models.generateContent({
