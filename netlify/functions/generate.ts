@@ -64,7 +64,7 @@ const parseMultipart = (body: string, contentType: string): ParsedBody => {
   return result;
 };
 
-export const handler: Handler = async (event, context) => {
+export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
