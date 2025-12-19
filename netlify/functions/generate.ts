@@ -143,19 +143,27 @@ export const handler: Handler = async (event) => {
 
     // Logic for optional job title
     const jobPromptLine = job 
-      ? `Line2 (optional): "${job}"` 
-      : `Line2 (optional): (LEAVE BLANK/EMPTY - DO NOT GENERATE TEXT HERE)`;
+      ? `Line2: "${job}" -> Font style: Elegant Cursive / Calligraphy Script (nét thanh nét đậm, bay bổng).` 
+      : `Line2: (LEAVE BLANK)`;
 
     const prompt = `
 Ultra hyper-realistic, close-up cinematic 3D shot of a luxury dark mahogany wooden nameplate on a premium leather executive desk pad.
 
-- LEFT portrait: High-quality FULL COLOR photographic portrait embedded/printed on the left side of the nameplate. DO NOT make it a monochromatic relief or statue. It must be a realistic, vibrant color photo of the person. Must match EXACT facial identity from reference image.
-- RIGHT text: Imperial Gold embossed; Line1: "${name}"; ${jobPromptLine}; Line3: "${phone}".
-- Must render Vietnamese text correctly with proper accents; no font errors.
-- Outfit is: "${outfit}"
-- Portrait style notes: "${portraitStyle}"
-- Background: blurred high-end corporate office, bokeh, cinematic DOF.
-- Negative prompt: no watermark, no gibberish text, no warped letters, no face mismatch, no extra fingers, no cartoon/anime, no grayscale, no bronze sculpture face, no monochromatic face.
+- LEFT PORTRAIT STYLE: "3D Polychrome Relief" (Phù điêu màu 3D). 
+  The person is sculpted/embossed sticking out of the wood board (High Relief), BUT painted with REALISTIC COLORS matching the uploaded photo (skin tone, hair color, clothes). 
+  It looks like a 3D statue/figure attached to the wood, not a flat print.
+  Must match EXACT facial identity.
+
+- RIGHT TEXT STYLE (Gold Embossed Metal):
+  1. Line 1 (Name): "${name}" -> Font style: Bold Serif / Times New Roman style (Mạnh mẽ, trang trọng).
+  2. ${jobPromptLine}
+  3. Line 3 (Phone): "${phone}" -> Font style: Simple Serif.
+
+- Must render Vietnamese text correctly with proper accents.
+- Outfit: "${outfit}"
+- Portrait style: "${portraitStyle}"
+- Background: Blurred high-end corporate office.
+- Negative prompt: flat print, paper, monochrome wood face, bronze statue face (must be colored), messy text, wrong spelling, anime.
     `.trim();
 
     const response = await ai.models.generateContent({
