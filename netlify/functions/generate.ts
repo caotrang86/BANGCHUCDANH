@@ -139,8 +139,20 @@ export const handler: Handler = async (event) => {
     let imageBase64 = null;
     
     // Duyệt qua các parts để tìm ảnh
-    if (response.candidates && response.candidates[0].content.parts) {
-      for (const part of response.candidates[0].content.parts) {
+   // Trích xuất ảnh từ response
+let imageBase64: string | null = null;
+
+// Lấy parts an toàn (tránh undefined)
+const parts = response?.candidates?.[0]?.content?.parts ?? [];
+
+for (const part of parts) {
+  const data = part?.inlineData?.data;
+  if (typeof data === "string" && data.length > 0) {
+    imageBase64 = data;
+    break;
+  }
+}
+
         if (part.inlineData) {
           imageBase64 = part.inlineData.data;
           break;
