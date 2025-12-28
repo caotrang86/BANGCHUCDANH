@@ -1,8 +1,7 @@
-import React, { useState, useRef } from 'react';
-import { Upload, Download, Loader2, Image as ImageIcon, Sparkles, User, Briefcase, Phone, Shirt, Palette } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Upload, Download, Loader2, Image as ImageIcon, Sparkles, User, Briefcase, Phone, Shirt, Palette, Calendar as CalendarIcon } from 'lucide-react';
 import { GenerateResponse } from './types';
 
-// Danh sách tùy chọn
 const OUTFIT_OPTIONS = [
   "Vest nữ tối màu sang trọng (blazer cao cấp, phong thái CEO)",
   "Vest trắng thanh lịch (blazer trắng kem, tối giản)",
@@ -19,24 +18,40 @@ const STYLE_OPTIONS = [
 ];
 
 const App: React.FC = () => {
-  // State
+  const [activeTab, setActiveTab] = useState<'nameplate' | 'calendar'>('nameplate');
   const [name, setName] = useState('');
-  const [job, setJob] = useState(''); // Optional
+  const [job, setJob] = useState('');
   const [phone, setPhone] = useState('');
-  
   const [outfit, setOutfit] = useState(OUTFIT_OPTIONS[0]);
   const [customOutfit, setCustomOutfit] = useState('');
   const [portraitStyle, setPortraitStyle] = useState(STYLE_OPTIONS[0]);
-
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  
   const [loading, setLoading] = useState(false);
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Gemini 3 models require mandatory API key selection
+  const [hasSelectedKey, setHasSelectedKey] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const checkApiKey = async () => {
+      if ((window as any).aistudio) {
+        const hasKey = await (window as any).aistudio.hasSelectedApiKey();
+        setHasSelectedKey(hasKey);
+      }
+    };
+    checkApiKey();
+  }, []);
+
+  const handleOpenSelectKey = async () => {
+    if ((window as any).aistudio) {
+      await (window as any).aistudio.openSelectKey();
+      // Assume success after triggering the dialog to avoid race conditions
+      setHasSelectedKey(true);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -45,20 +60,9 @@ const App: React.FC = () => {
         setError('Vui lòng chỉ tải lên file ảnh (JPG, PNG).');
         return;
       }
-      if (selectedFile.size > 5 * 1024 * 1024) {
-        setError('Kích thước ảnh không được vượt quá 5MB.');
-        return;
-      }
       setFile(selectedFile);
       setPreview(URL.createObjectURL(selectedFile));
       setError(null);
-    }
-  };
-
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    if (/^[0-9\s]*$/.test(value)) {
-      setPhone(value);
     }
   };
 
@@ -67,56 +71,46 @@ const App: React.FC = () => {
     setError(null);
     setResultImage(null);
 
-    // Validation
-    if (!name.trim()) return setError('Vui lòng nhập Họ và Tên.');
-    if (!phone.trim()) return setError('Vui lòng nhập Số điện thoại.');
-    if (!file) return setError('Vui lòng tải lên ảnh chân dung.');
-    
-    // Xử lý custom outfit
-    let finalOutfit = outfit;
-    if (outfit === "Tùy chọn khác...") {
-      if (!customOutfit.trim()) return setError('Vui lòng nhập mô tả trang phục mong muốn.');
-      finalOutfit = customOutfit.trim();
+    if (activeTab === 'nameplate') {
+      if (!name.trim()) return setError('Vui lòng nhập Họ và Tên.');
+      if (!phone.trim()) return setError('Vui lòng nhập Số điện thoại.');
     }
+    if (!file) return setError('Vui lòng tải lên ảnh chân dung.');
 
     setLoading(true);
-
     try {
-      // Dùng FormData để gửi multipart/form-data
       const formData = new FormData();
-      formData.append('name', name.trim());
-      formData.append('job', job.trim()); // Có thể rỗng
-      formData.append('phone', phone.replace(/\s/g, ''));
+      formData.append('mode', activeTab);
       formData.append('face', file);
-      formData.append('outfit', finalOutfit);
-      formData.append('portraitStyle', portraitStyle);
+
+      if (activeTab === 'nameplate') {
+        formData.append('name', name.trim());
+        formData.append('job', job.trim());
+        formData.append('phone', phone.replace(/\s/g, ''));
+        formData.append('outfit', outfit === "Tùy chọn khác..." ? customOutfit : outfit);
+        formData.append('portraitStyle', portraitStyle);
+      }
 
       const response = await fetch('/.netlify/functions/generate', {
         method: 'POST',
-        body: formData, // Fetch tự động set Content-Type là multipart/form-data
+        body: formData,
       });
 
-      let data: GenerateResponse;
-      try {
-        data = await response.json();
-      } catch (e) {
-        throw new Error("Phản hồi máy chủ không hợp lệ.");
-      }
-
+      const data: GenerateResponse = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || 'Có lỗi xảy ra khi tạo ảnh.');
+        // If the request fails with "Requested entity was not found.", prompt to re-select API Key
+        if (data.error?.includes("Requested entity was not found")) {
+          setHasSelectedKey(false);
+          await handleOpenSelectKey();
+          return;
+        }
+        throw new Error(data.error || 'Lỗi tạo ảnh.');
       }
 
-      const finalImage = data.image_base64 
-        ? `data:image/png;base64,${data.image_base64}` 
-        : data.image_url;
-
-      if (!finalImage) throw new Error("Không nhận được ảnh từ AI.");
-
-      setResultImage(finalImage);
+      const finalImage = data.image_base64 ? `data:image/png;base64,${data.image_base64}` : data.image_url;
+      setResultImage(finalImage || null);
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Lỗi kết nối đến máy chủ.");
+      setError(err.message || "Lỗi kết nối máy chủ.");
     } finally {
       setLoading(false);
     }
@@ -126,265 +120,169 @@ const App: React.FC = () => {
     if (resultImage) {
       const link = document.createElement('a');
       link.href = resultImage;
-      link.download = `bang-chuc-danh-${Date.now()}.png`;
-      document.body.appendChild(link);
+      link.download = `trend-${activeTab}-${Date.now()}.png`;
       link.click();
-      document.body.removeChild(link);
     }
   };
 
+  // UI for API Key selection requirement
+  if (hasSelectedKey === false) {
+    return (
+      <div className="min-h-screen bg-[#0f0d0c] flex items-center justify-center p-4">
+        <div className="bg-[#1a1614] border border-amber-900/40 p-8 rounded-2xl max-w-md w-full text-center shadow-2xl">
+          <Sparkles className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-black uppercase tracking-widest text-amber-400 mb-2">Yêu cầu API Key</h2>
+          <p className="text-amber-200/60 mb-8 text-sm leading-relaxed">
+            Để sử dụng mô hình tạo ảnh cao cấp <strong>Gemini 3 Pro</strong>, bạn cần chọn API Key cá nhân từ dự án Google Cloud có trả phí.
+          </p>
+          <button 
+            onClick={handleOpenSelectKey}
+            className="w-full py-4 bg-gradient-to-r from-amber-500 to-amber-700 text-black font-black uppercase tracking-widest rounded-xl hover:scale-[1.02] transition-all shadow-lg mb-6"
+          >
+            Chọn API Key
+          </button>
+          <a 
+            href="https://ai.google.dev/gemini-api/docs/billing" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-amber-600 hover:text-amber-500 text-xs font-bold underline"
+          >
+            Tìm hiểu về Billing & API Key
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[#1a1614] text-amber-50 font-sans selection:bg-amber-900 selection:text-white">
+    <div className="min-h-screen bg-[#0f0d0c] text-amber-50 font-sans">
       <div className="max-w-6xl mx-auto px-4 py-8 md:py-12">
-        
-        {/* Header */}
-        <header className="mb-10 text-center">
-          <h1 className="text-3xl md:text-5xl font-bold bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-600 bg-clip-text text-transparent mb-3 tracking-tight">
-            Cao Trang AI
+        <header className="mb-8 text-center">
+          <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-600 bg-clip-text text-transparent mb-2 tracking-tighter">
+            Tạo ảnh Trend
           </h1>
-          <p className="text-amber-200/60 text-lg uppercase tracking-widest text-sm">
-            Kiến Tạo Biển Chức Danh Cao Cấp
+          <p className="text-amber-200/40 text-sm uppercase tracking-[0.3em] font-medium">
+            Kho ứng dụng sáng tạo AI
           </p>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
-          {/* Cột Trái: Form */}
-          <div className="lg:col-span-5 bg-[#26211e] border border-amber-900/30 p-6 md:p-8 rounded-sm shadow-2xl relative overflow-hidden">
-            {/* Decoration line */}
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-600 to-transparent opacity-50"></div>
+        {/* Tab Switcher */}
+        <div className="flex justify-center mb-8">
+          <div className="bg-[#1e1b19] p-1 rounded-lg border border-amber-900/30 flex gap-1">
+            <button 
+              onClick={() => { setActiveTab('nameplate'); setResultImage(null); }}
+              className={`px-6 py-2 rounded-md text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${activeTab === 'nameplate' ? 'bg-amber-600 text-black shadow-lg' : 'text-amber-500/50 hover:text-amber-400'}`}
+            >
+              <Sparkles className="w-4 h-4" /> Biển Chức Danh
+            </button>
+            <button 
+              onClick={() => { setActiveTab('calendar'); setResultImage(null); }}
+              className={`px-6 py-2 rounded-md text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${activeTab === 'calendar' ? 'bg-amber-600 text-black shadow-lg' : 'text-amber-500/50 hover:text-amber-400'}`}
+            >
+              <CalendarIcon className="w-4 h-4" /> Lịch 2026
+            </button>
+          </div>
+        </div>
 
-            <div className="flex items-center gap-2 mb-6 border-b border-amber-900/30 pb-4">
-              <Sparkles className="w-5 h-5 text-amber-500" />
-              <h2 className="text-xl font-bold text-amber-100 uppercase tracking-wide">Thông Tin Lãnh Đạo</h2>
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-5 bg-[#1a1614] border border-amber-900/20 p-6 md:p-8 rounded-xl shadow-2xl">
+            <h2 className="text-lg font-bold text-amber-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+              {activeTab === 'nameplate' ? 'Thông Tin Lãnh Đạo' : 'Kiến Tạo Lịch 2026'}
+            </h2>
 
             <form onSubmit={handleSubmit} className="space-y-5">
-              
-              {/* Ảnh chân dung */}
-              <div className="mb-6">
-                <label className="block text-xs font-semibold text-amber-500 uppercase tracking-wider mb-2">
-                  Ảnh Chân Dung Tham Khảo <span className="text-red-500">*</span>
-                </label>
-                <div 
-                  className={`relative group border border-dashed rounded-sm p-6 text-center cursor-pointer transition-all duration-300 
-                    ${file 
-                      ? 'border-amber-500/50 bg-amber-900/10' 
-                      : 'border-amber-800/40 hover:border-amber-500/50 hover:bg-amber-900/5'
-                    }`}
-                  onClick={() => !loading && fileInputRef.current?.click()}
-                >
-                  <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    onChange={handleFileChange} 
-                    className="hidden" 
-                    accept="image/png, image/jpeg, image/jpg"
-                    disabled={loading}
-                  />
-                  
-                  {preview ? (
-                    <div className="relative w-32 h-40 mx-auto overflow-hidden shadow-lg border border-amber-500/30 bg-black">
-                      <img src={preview} alt="Preview" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/40 group-hover:bg-transparent transition-all flex items-center justify-center">
-                        <span className="text-xs text-white opacity-0 group-hover:opacity-100 bg-black/60 px-2 py-1 rounded">Đổi ảnh</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center py-2">
-                      <div className="w-12 h-12 rounded-full bg-amber-900/20 flex items-center justify-center mb-3 text-amber-600 group-hover:text-amber-400 transition-colors">
-                        <Upload className="w-6 h-6" />
-                      </div>
-                      <span className="text-sm text-amber-200/80 font-medium">Tải ảnh lên (JPG/PNG)</span>
-                      <span className="text-xs text-amber-500/40 mt-1">Khuyên dùng: Ảnh chính diện, rõ nét</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Tên & Ngành nghề */}
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="flex items-center gap-2 text-xs font-semibold text-amber-500 uppercase tracking-wider mb-1">
-                    <User className="w-3 h-3" /> Họ và Tên <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full bg-[#1e1b19] border border-amber-900/50 text-amber-100 px-4 py-3 rounded-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition placeholder-amber-800/50"
-                    placeholder="VD: Nguyễn Văn A"
-                    disabled={loading}
-                  />
-                </div>
-
-                <div>
-                  <label className="flex items-center gap-2 text-xs font-semibold text-amber-500 uppercase tracking-wider mb-1">
-                    <Briefcase className="w-3 h-3" /> Chức danh / Ngành nghề
-                  </label>
-                  <input
-                    type="text"
-                    value={job}
-                    onChange={(e) => setJob(e.target.value)}
-                    className="w-full bg-[#1e1b19] border border-amber-900/50 text-amber-100 px-4 py-3 rounded-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition placeholder-amber-800/50"
-                    placeholder="VD: Giám Đốc Điều Hành (Để trống nếu muốn)"
-                    disabled={loading}
-                  />
-                </div>
-              </div>
-
-              {/* Số điện thoại */}
-              <div>
-                <label className="flex items-center gap-2 text-xs font-semibold text-amber-500 uppercase tracking-wider mb-1">
-                  <Phone className="w-3 h-3" /> Số điện thoại <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={handlePhoneChange}
-                  className="w-full bg-[#1e1b19] border border-amber-900/50 text-amber-100 px-4 py-3 rounded-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition placeholder-amber-800/50 font-mono"
-                  placeholder="09xx xxx xxx"
-                  disabled={loading}
-                />
-              </div>
-
-              {/* Trang phục & Phong cách */}
-              <div className="grid grid-cols-1 gap-4 pt-2">
-                <div>
-                  <label className="flex items-center gap-2 text-xs font-semibold text-amber-500 uppercase tracking-wider mb-1">
-                    <Shirt className="w-3 h-3" /> Trang phục
-                  </label>
-                  <select
-                    value={outfit}
-                    onChange={(e) => setOutfit(e.target.value)}
-                    className="w-full bg-[#1e1b19] border border-amber-900/50 text-amber-100 px-4 py-3 rounded-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition appearance-none cursor-pointer"
-                    disabled={loading}
-                  >
-                    {OUTFIT_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                  </select>
-                  {outfit === "Tùy chọn khác..." && (
-                    <input
-                      type="text"
-                      value={customOutfit}
-                      onChange={(e) => setCustomOutfit(e.target.value)}
-                      className="mt-2 w-full bg-[#1e1b19] border border-amber-900/50 text-amber-100 px-4 py-2 rounded-sm focus:border-amber-500 outline-none text-sm placeholder-amber-800/50 animate-fade-in"
-                      placeholder="Mô tả trang phục bạn muốn..."
-                      disabled={loading}
-                    />
-                  )}
-                </div>
-
-                <div>
-                  <label className="flex items-center gap-2 text-xs font-semibold text-amber-500 uppercase tracking-wider mb-1">
-                    <Palette className="w-3 h-3" /> Phong cách chân dung
-                  </label>
-                  <select
-                    value={portraitStyle}
-                    onChange={(e) => setPortraitStyle(e.target.value)}
-                    className="w-full bg-[#1e1b19] border border-amber-900/50 text-amber-100 px-4 py-3 rounded-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition appearance-none cursor-pointer"
-                    disabled={loading}
-                  >
-                    {STYLE_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Error & Button */}
-              <div className="pt-4">
-                {error && (
-                  <div className="mb-4 bg-red-900/20 text-red-400 p-3 rounded-sm text-sm border border-red-900/50 text-center">
-                    {error}
+              <div 
+                className={`relative border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${file ? 'border-amber-500/40 bg-amber-900/5' : 'border-amber-900/20 hover:border-amber-600/50'}`}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
+                {preview ? (
+                  <img src={preview} alt="Preview" className="w-24 h-32 mx-auto object-cover rounded-lg border border-amber-500/30 shadow-xl" />
+                ) : (
+                  <div className="py-4">
+                    <Upload className="w-10 h-10 text-amber-700 mx-auto mb-2" />
+                    <p className="text-sm text-amber-200/60">Tải ảnh chân dung rõ nét</p>
                   </div>
                 )}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className={`w-full py-4 px-6 rounded-sm font-bold text-black uppercase tracking-widest shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-all transform hover:-translate-y-0.5
-                    ${loading 
-                      ? 'bg-amber-800/50 text-amber-500/50 cursor-not-allowed shadow-none' 
-                      : 'bg-gradient-to-r from-amber-400 via-yellow-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 active:scale-[0.99]'
-                    }`}
-                >
-                  {loading ? (
-                    <span className="flex items-center justify-center gap-3">
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Đang Chế Tác...
-                    </span>
-                  ) : (
-                    'Tạo Tác Phẩm'
-                  )}
-                </button>
               </div>
+
+              {activeTab === 'nameplate' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-amber-600 uppercase mb-1 block">Họ và Tên *</label>
+                    <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-black/40 border border-amber-900/30 p-3 rounded-lg outline-none focus:border-amber-500 transition" placeholder="Nguyễn Văn A" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-amber-600 uppercase mb-1 block">Chức danh</label>
+                    <input type="text" value={job} onChange={(e) => setJob(e.target.value)} className="w-full bg-black/40 border border-amber-900/30 p-3 rounded-lg outline-none focus:border-amber-500 transition" placeholder="Giám Đốc" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-amber-600 uppercase mb-1 block">Số điện thoại *</label>
+                    <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^\d\s]/g, ""))} className="w-full bg-black/40 border border-amber-900/30 p-3 rounded-lg outline-none focus:border-amber-500 transition font-mono" placeholder="0988xxxxxx" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-bold text-amber-600 uppercase mb-1 block">Trang phục</label>
+                      <select value={outfit} onChange={(e) => setOutfit(e.target.value)} className="w-full bg-black/40 border border-amber-900/30 p-3 rounded-lg text-sm outline-none">
+                        {OUTFIT_OPTIONS.map(o => <option key={o} value={o}>{o.split('(')[0]}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-amber-600 uppercase mb-1 block">Phong cách</label>
+                      <select value={portraitStyle} onChange={(e) => setPortraitStyle(e.target.value)} className="w-full bg-black/40 border border-amber-900/30 p-3 rounded-lg text-sm outline-none">
+                        {STYLE_OPTIONS.map(s => <option key={s} value={s}>{s.split('(')[0]}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'calendar' && (
+                <div className="p-4 bg-amber-900/10 border border-amber-900/20 rounded-lg text-xs text-amber-200/60 leading-relaxed italic">
+                  Hệ thống AI sẽ tự động phân tích khuôn mặt, hoàn thiện trang phục lịch sự và ghép vào bối cảnh quán cà phê đêm sang trọng cùng bộ lịch năm 2026.
+                </div>
+              )}
+
+              {error && <p className="text-red-400 text-xs text-center">{error}</p>}
+
+              <button 
+                type="submit" 
+                disabled={loading}
+                className={`w-full py-4 rounded-xl font-black uppercase tracking-widest transition-all ${loading ? 'bg-amber-900/20 text-amber-800' : 'bg-gradient-to-r from-amber-500 to-amber-700 text-black hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-amber-900/20'}`}
+              >
+                {loading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 'Bắt Đầu Chế Tác'}
+              </button>
             </form>
           </div>
 
-          {/* Cột Phải: Preview */}
-          <div className="lg:col-span-7 h-full">
-            <div className="bg-[#26211e] border border-amber-900/30 p-2 rounded-sm shadow-2xl h-full min-h-[600px] flex flex-col relative">
-               {/* Corner Accents */}
-               <div className="absolute top-0 left-0 w-4 h-4 border-t border-l border-amber-600"></div>
-               <div className="absolute top-0 right-0 w-4 h-4 border-t border-r border-amber-600"></div>
-               <div className="absolute bottom-0 left-0 w-4 h-4 border-b border-l border-amber-600"></div>
-               <div className="absolute bottom-0 right-0 w-4 h-4 border-b border-r border-amber-600"></div>
-
-              {resultImage ? (
-                <div className="flex-1 flex flex-col p-4 animate-fade-in">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-amber-500 text-xs font-bold uppercase tracking-widest">Tác phẩm hoàn thiện</span>
-                    <span className="text-amber-700 text-xs">AI Luxury Generator</span>
+          <div className="lg:col-span-7 bg-[#1a1614] border border-amber-900/20 p-4 rounded-xl flex flex-col min-h-[500px] relative shadow-inner">
+            {resultImage ? (
+              <div className="flex-1 flex flex-col items-center justify-center p-4">
+                <img src={resultImage} alt="Kết quả" className="max-w-full max-h-[70vh] rounded-lg shadow-2xl border border-amber-900/30" />
+                <button onClick={handleDownload} className="mt-6 flex items-center gap-2 bg-amber-600 px-8 py-3 rounded-full text-black font-bold uppercase text-sm hover:bg-amber-500 transition-colors">
+                  <Download className="w-4 h-4" /> Tải ảnh gốc
+                </button>
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-center opacity-30">
+                {loading ? (
+                  <div className="animate-pulse space-y-4">
+                    <div className="w-16 h-16 bg-amber-600 rounded-full mx-auto" />
+                    <p className="text-amber-500 font-bold uppercase tracking-widest">Đang vẽ tranh bằng AI...</p>
                   </div>
-                  
-                  <div className="relative flex-1 rounded-sm overflow-hidden shadow-black/50 shadow-2xl border border-amber-900/50 bg-black group">
-                    <img src={resultImage} alt="Kết quả" className="w-full h-full object-contain" />
+                ) : (
+                  <div className="space-y-4">
+                    <ImageIcon className="w-20 h-20 text-amber-900 mx-auto" />
+                    <p className="text-amber-800 font-bold uppercase tracking-[0.2em]">Preview Area</p>
                   </div>
-
-                  <div className="mt-6 flex justify-center">
-                    <button 
-                      onClick={handleDownload}
-                      className="flex items-center gap-2 bg-amber-900/40 border border-amber-500/50 text-amber-400 py-3 px-8 hover:bg-amber-500 hover:text-black transition-all font-bold uppercase tracking-wider text-sm rounded-sm"
-                    >
-                      <Download className="w-5 h-5" /> Tải Xuống Bản Gốc
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-center p-8 opacity-60">
-                  {loading ? (
-                    <div className="space-y-6">
-                      <div className="relative w-24 h-24 mx-auto">
-                        <div className="absolute inset-0 border-t-2 border-amber-500 rounded-full animate-spin"></div>
-                        <div className="absolute inset-2 border-r-2 border-amber-700 rounded-full animate-spin reverse"></div>
-                      </div>
-                      <div>
-                        <h3 className="text-amber-400 text-xl font-light mb-2">Đang Chạm Khắc Kỹ Thuật Số</h3>
-                        <p className="text-amber-700 text-sm">AI đang phân tích gương mặt & tạo hình 3D...</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="w-20 h-20 bg-amber-900/20 rounded-full flex items-center justify-center mx-auto border border-amber-900/30">
-                        <ImageIcon className="w-10 h-10 text-amber-800" />
-                      </div>
-                      <h3 className="text-amber-500/50 text-lg uppercase tracking-widest font-bold">Sẵn Sàng Chế Tác</h3>
-                      <p className="text-amber-800 text-sm max-w-xs mx-auto">
-                        Điền thông tin và tải ảnh để khởi tạo bảng danh vị độc bản.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
-
         </div>
       </div>
     </div>
   );
-}
+};
 
 export default App;
