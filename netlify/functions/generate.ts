@@ -151,12 +151,18 @@ Ultra hyper-realistic, close-up cinematic 3D shot of a luxury dark mahogany wood
       },
     });
 
-    // Extracting image output from the response candidates
-    const imagePart = response?.candidates?.[0]?.content?.parts.find(p => p.inlineData);
-    if (!imagePart) return json(502, { error: "AI không tạo được ảnh." });
+       // Extracting image output from the response candidates (an toàn cho TypeScript)
+    const parts = response?.candidates?.[0]?.content?.parts ?? [];
+    const imagePart = parts.find((p: any) => p?.inlineData?.data);
+
+    if (!imagePart || !imagePart.inlineData || !imagePart.inlineData.data) {
+      return json(502, { error: "AI không tạo được ảnh." });
+    }
+
+    const imageBase64 = imagePart.inlineData.data as string;
 
     return json(200, {
-      image_base64: imagePart.inlineData?.data,
+      image_base64: imageBase64,
       request_id: `trend-${Date.now()}`,
     });
   } catch (err: any) {

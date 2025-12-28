@@ -1,6 +1,17 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Download, Loader2, Image as ImageIcon, Sparkles, User, Briefcase, Phone, Shirt, Palette, Calendar as CalendarIcon } from 'lucide-react';
-import { GenerateResponse } from './types';
+import {
+  Upload,
+  Download,
+  Loader2,
+  Image as ImageIcon,
+  Sparkles,
+  User as _User,
+  Briefcase as _Briefcase,
+  Phone as _Phone,
+  Shirt as _Shirt,
+  Palette as _Palette,
+  Calendar as CalendarIcon
+} from 'lucide-react';
+
 
 const OUTFIT_OPTIONS = [
   "Vest nữ tối màu sang trọng (blazer cao cấp, phong thái CEO)",
@@ -23,7 +34,7 @@ const App: React.FC = () => {
   const [job, setJob] = useState('');
   const [phone, setPhone] = useState('');
   const [outfit, setOutfit] = useState(OUTFIT_OPTIONS[0]);
-  const [customOutfit, setCustomOutfit] = useState('');
+  const [customOutfit, _setCustomOutfit] = useState('');
   const [portraitStyle, setPortraitStyle] = useState(STYLE_OPTIONS[0]);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
