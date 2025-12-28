@@ -1,16 +1,20 @@
+import React, {
+  useState,
+  useRef,
+  useEffect
+} from "react";
+
 import {
   Upload,
   Download,
   Loader2,
   Image as ImageIcon,
   Sparkles,
-  User as _User,
-  Briefcase as _Briefcase,
-  Phone as _Phone,
-  Shirt as _Shirt,
-  Palette as _Palette,
   Calendar as CalendarIcon
-} from 'lucide-react';
+} from "lucide-react";
+
+import { GenerateResponse } from "./types";
+
 
 
 const OUTFIT_OPTIONS = [
